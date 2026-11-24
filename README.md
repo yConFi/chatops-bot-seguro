@@ -1,61 +1,158 @@
-# Ejercicio 5 — Bot ChatOps seguro (Grupo 4)
+# 🔐 ChatOps Bot seguro en Bash
 
-**Autores:** Pol, Fran, Javi, Yeray, Ricardo — Máster de Ciberseguridad & IA (Evolve)
+![Bash](https://img.shields.io/badge/Bash-5.x-4EAA25?logo=gnubash&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3-3776AB?logo=python&logoColor=white)
+![Kali Linux](https://img.shields.io/badge/Kali_Linux-557C94?logo=kalilinux&logoColor=white)
+![Pruebas](https://img.shields.io/badge/pruebas-56%2F56_pasan-brightgreen)
+![HMAC-SHA256](https://img.shields.io/badge/firma-HMAC--SHA256-blueviolet)
 
-| Fichero | Qué es |
-|---|---|
-| `bot.sh` | El bot: consulta órdenes, las valida y ejecuta solo acciones permitidas. |
-| `orden.sh` | El cliente: envía una orden firmada y espera la respuesta. |
-| `servidor_falso.py` | Imitación local del servidor del profesor, **solo para pruebas**. |
-| `pruebas.sh` | Pruebas automáticas contra el servidor falso. |
-| `resultados_pruebas.md` | Resultado real de la última ejecución de `pruebas.sh` (lo genera el script; indica fecha y máquina). |
-| `prompts.md` | Uso de la IA y registro de las pruebas ejecutadas. |
-| `revision.md` | Checklist requisito → implementación → prueba y revisión de seguridad. |
+Bot **ChatOps** que recibe órdenes por un canal HTTP **público y compartido** y solo
+ejecuta cuatro acciones de una **lista blanca** (`ping`, `estado`, `puertos`, `ayuda`).
+Todo lo demás —`8.8.8.8; id`, `$(whoami)`, `-c 100000`— se rechaza **sin ejecutar nada**.
 
-**Anexos** (historial del uso de la IA, referenciados desde `prompts.md`):
+> **El reto:** los tokens de los 9 grupos se vieron en directo, así que **cualquiera puede
+> publicar en nuestro canal**. El bot tiene que distinguir órdenes legítimas de ataques,
+> repeticiones e inundaciones, sin perder nunca una orden ni ejecutar nada dos veces.
 
-| Fichero | Qué es |
-|---|---|
-| `prompt_debate_ej5.md` | Prompt de arranque y reglas del debate ChatGPT (redactor) ↔ Claude (auditor). |
-| `ronda1_auditoria_claude.md` | Auditoría completa de la Ronda 1 y respuestas del grupo a sus preguntas. |
-| `prompt_final_ej5.md` | Prompt final con el que se generó el código (copia literal de `prompts.md` §2). |
+Proyecto de grupo del **Máster de Ciberseguridad & IA (Evolve)** — Grupo 4: Pol, Fran,
+Javi, Yeray y Ricardo.
 
 ---
 
-## 1. Objetivo
+## ✨ Qué lo hace interesante
 
-Construir un bot ChatOps que reciba órdenes por un canal HTTP compartido y que solo ejecute
-acciones de una **lista blanca**: `ping`, `estado`, `puertos` y `ayuda`. Cualquier otra
-cosa se rechaza **sin ejecutar nada**, por ejemplo `8.8.8.8; id` o `$(whoami)`.
+| Amenaza | Defensa | Cómo se demuestra |
+|---|---|---|
+| **Inyección de comandos** (`;`, `$( )`, `` ` ` ``, `&&`, `\|`) | Lista blanca con `case`, regex estricta y **nunca** `eval` / `bash -c` | Los ataques intentan crear `pwned` y modificar `testigo.txt`: la prueba verifica el hash y que `pwned` no existe |
+| **Inyección de argumentos** (`-f`, `-c 100000`) | Nada puede empezar por `-`; siempre `"$var"` y `--` | Rechazadas en `pruebas.sh` |
+| **Suplantación** (cualquiera conoce el token) | **HMAC-SHA256** sobre JSON canónico (`jq -cS`), también en las respuestas | Firma falsa, ausente o mensaje alterado tras firmar → rechazado |
+| **Repetición** de órdenes capturadas | Ventana de ±60 s y `id_orden` vistos persistidos en disco, marcados **antes** de ejecutar | Id repetido y `ts` viejo → rechazados, también tras reiniciar |
+| **Abuso / inundación** | 5 órdenes/min por remitente, máximo de mensajes por ciclo y de bytes por `/sync` | La sexta orden en un minuto se rechaza |
+| **Mensaje envenenado** que rompe `/sync` | Salto controlado tras 3 fallos, solo si el servidor está sano | El bot lo salta (auditado) y sigue vivo |
+| **Procesos colgados** | `timeout` de 10 s sin procesos huérfanos; duración medida con reloj monotónico | Un `ping` falso que se cuelga devuelve `error`/124 en 10–15 s |
+| **Fuga de secretos** | Solo variables de entorno; nunca en código, logs ni auditoría | Al acabar se busca la clave y el token en todos los ficheros: 0 apariciones |
+| **Manipulación de terminal** (ESC, BEL) | Limpieza de caracteres de control antes de mostrar | Salida maliciosa mostrada limpia |
 
-Además de la fase 1, implementamos cuatro ampliaciones de la fase 2: **firma HMAC,
-anti-repetición, límite de frecuencia y auditoría**.
+Y todo queda en una **auditoría JSONL**: qué llegó, qué se decidió y por qué.
 
-## 2. Arquitectura en sencillo
+## 🏗️ Arquitectura
 
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as orden.sh (cliente)
+    participant S as Servidor HTTP compartido
+    participant B as bot.sh (Kali)
+    C->>S: POST /webhook/$TOKEN_G4 · orden firmada (HMAC)
+    loop cada 2 s
+        B->>S: GET /sync?since=cursor
+        S-->>B: mensajes nuevos (de todos los grupos)
+    end
+    B->>B: cadena de controles → ejecuta solo si todo pasa
+    B->>S: POST respuesta firmada
+    C->>S: GET /sync?since=N
+    S-->>C: respuesta → verifica la firma y la muestra
 ```
- orden.sh ──POST /webhook/$TOKEN_G4──►  servidor del profesor  ◄──GET /sync?since=N── bot.sh
- (firma)                               (un único canal: órdenes        (cada 2 s)
-    ▲                                   y respuestas mezcladas)            │
-    └───────────GET /sync?since=N──────────────┘◄──POST respuesta firmada──┘
+
+Cada mensaje recorre esta **cadena de controles**; el primero que falla decide y el
+mensaje se rechaza o se ignora **sin ejecutar nada**:
+
+```mermaid
+flowchart LR
+    A["Mensaje"] --> B{"≤ 4 KB"} --> C{"¿Es una orden?"} --> D{"Esquema y tipos"}
+    D --> E{"Firma HMAC"} --> F{"ts ±60 s e id nuevo"} --> G{"Límite de frecuencia"}
+    G --> H{"Acción en lista blanca y args válidos"} --> I["✅ Ejecutar con timeout 10 s"]
 ```
 
-- Hay **un solo endpoint por grupo**. Las órdenes llevan `canal: "ordenes-g4"` (o no
-  llevan canal, como las del profesor). Las respuestas llevan `canal: "respuestas-g4"` y el
-  campo `bot`.
-- Todo el HTTP está en dos funciones, `publicar()` y `consultar()`. El resto del código no
-  sabe qué receptor se usa.
-- El bot recorre los mensajes nuevos **en orden de `_id`** y guarda un cursor para no
-  tratar nada dos veces.
-- Cada mensaje pasa por esta **cadena de controles**. El primero que falla decide:
+- Hay **un solo endpoint por grupo**: órdenes y respuestas comparten canal y se distinguen
+  por el campo `canal` (`ordenes-g4` / `respuestas-g4`).
+- Todo el HTTP está en dos funciones, `publicar()` y `consultar()`; el resto del código no
+  sabe qué servidor se usa.
+- El bot recorre los mensajes **en orden de `_id`** y guarda un cursor para no tratar nada
+  dos veces.
 
-```
-tamaño ≤ 4 KB → ¿es una orden? → id_orden válido → claves permitidas → tipos
-  → firma HMAC → antigüedad del ts e id ya visto → límite de frecuencia
-  → acción de la lista blanca y argumentos válidos → EJECUTAR (con timeout 10)
+## 🚀 Pruébalo en local
+
+No hace falta el servidor del máster: `servidor_falso.py` lo imita en `127.0.0.1:8099`,
+que es a donde apuntan los scripts por defecto. Necesitas Linux (Kali, Ubuntu o WSL) con
+`jq`, `curl`, `openssl`, `iproute2`, `util-linux`, `procps` y `python3`.
+
+```bash
+git clone https://github.com/yConFi/chatops-bot-seguro.git && cd chatops-bot-seguro
+export TOKEN_G4="demo-$(openssl rand -hex 8)" CLAVE="$(openssl rand -hex 32)"
+
+python3 servidor_falso.py &        # servidor local (solo pruebas)
+./bot.sh &                         # el bot, en segundo plano
+
+./orden.sh ping 8.8.8.8            # ✅ ok
+./orden.sh estado                  # ✅ ok, JSON con uptime, memoria y disco
+./orden.sh ping '8.8.8.8; id'      # ❌ rechazada: objetivo no válido
+./orden.sh --firma-falsa estado    # ❌ rechazada: firma incorrecta
 ```
 
-## 3. Dependencias
+O lanza la batería completa, que arranca su propio servidor y bot en un entorno aislado:
+
+```bash
+./pruebas.sh       # ~5 min · 56 PASA · 0 FALLA
+```
+
+## 🧪 Pruebas
+
+`pruebas.sh` ejecuta **56 comprobaciones automáticas** contra el servidor falso y guarda el
+resultado real en [`resultados_pruebas.md`](resultados_pruebas.md). Lo importante no es
+solo que el bot responda «rechazada», sino **demostrar que el ataque no tuvo efecto**:
+
+```text
+== Inyección (comillas simples) + fichero testigo
+  [PASA ] ping 8.8.8.8\;\ id                         esperado=rechazada obtenido=rechazada
+  [PASA ] ping \$\(touch\ /tmp/…/pwned\)             esperado=rechazada obtenido=rechazada
+  [PASA ] ping 8.8.8.8\ \&\&\ touch\ /tmp/…/pwned    esperado=rechazada obtenido=rechazada
+  [PASA ] fichero testigo tras los ataques           esperado=intacto obtenido=intacto
+  [PASA ] fichero pwned tras los ataques             esperado=no_existe obtenido=no_existe
+== Secretos fuera de logs, estado y auditoría (fila 14)
+  [PASA ] ficheros que contienen CLAVE o TOKEN_G4    esperado=0 obtenido=0
+
+Total: 56 PASA · 0 FALLA
+```
+
+Ejecutarlas en una segunda máquina (WSL) destapó un fallo real que en Kali no se veía: la
+duración se medía con el reloj de pared, que WSL corrige en caliente. Ahora se usa un reloj
+monotónico ([commit](https://github.com/yConFi/chatops-bot-seguro/commit/2ba7718)).
+
+## 🧠 Lo que demuestra este proyecto
+
+- **Bash defensivo:** `set -euo pipefail`, entrecomillado sistemático, `trap` para un cierre
+  limpio, escrituras atómicas (`mktemp` + `mv`), `flock` para una sola instancia.
+- **Criptografía aplicada:** firma HMAC y canonicalización de JSON para que cliente y bot
+  firmen exactamente los mismos bytes.
+- **Modelado de amenazas honesto:** cada defensa tiene su prueba, y las limitaciones
+  conocidas están documentadas en vez de escondidas ([ver abajo](#8-limitaciones-y-supuestos)).
+- **Testing de seguridad:** pruebas que verifican la *ausencia* de efectos, servidor
+  simulado con ganchos para inyectar fallos (`/sync` roto, mensaje envenenado, error 500).
+- **Uso crítico de la IA:** el código se diseñó con un debate entre ChatGPT (redactor) y
+  Claude (auditor), con el grupo decidiendo en cada ronda. Todo el proceso está en
+  [`prompts.md`](prompts.md).
+
+## 📁 Estructura
+
+| Fichero | Qué es |
+|---|---|
+| [`bot.sh`](bot.sh) | El bot: consulta órdenes, las valida y ejecuta solo acciones permitidas. |
+| [`orden.sh`](orden.sh) | El cliente: envía una orden firmada y espera la respuesta. |
+| [`servidor_falso.py`](servidor_falso.py) | Imitación local del servidor del máster, **solo para pruebas**. |
+| [`pruebas.sh`](pruebas.sh) | Pruebas automáticas contra el servidor falso. |
+| [`resultados_pruebas.md`](resultados_pruebas.md) | Resultado real de la última ejecución de `pruebas.sh` (indica fecha y máquina). |
+| [`revision.md`](revision.md) | Checklist requisito → implementación → prueba, y revisión de seguridad. |
+| [`prompts.md`](prompts.md) | Uso de la IA y registro de las pruebas ejecutadas. |
+| [`prompt_debate_ej5.md`](prompt_debate_ej5.md) | Anexo: prompt de arranque y reglas del debate ChatGPT ↔ Claude. |
+| [`ronda1_auditoria_claude.md`](ronda1_auditoria_claude.md) | Anexo: auditoría de la Ronda 1 y respuestas del grupo. |
+| [`prompt_final_ej5.md`](prompt_final_ej5.md) | Anexo: prompt final con el que se generó el código. |
+
+---
+
+# 📖 Documentación técnica
+
+## 1. Dependencias
 
 Kali Linux con `bash` 5, `jq` ≥ 1.6, `curl`, `openssl`, `timeout`, `ping` (iputils), `ss`
 (iproute2), `flock` (util-linux), `free`/`uptime` (procps) y `python3` (solo para las pruebas).
@@ -65,7 +162,7 @@ Cada script comprueba sus dependencias al arrancar y avisa de lo que falte:
 sudo apt install jq curl openssl iputils-ping iproute2 util-linux procps python3
 ```
 
-## 4. Variables de entorno
+## 2. Variables de entorno
 
 Los secretos **solo** se leen del entorno. Nunca están en el código, los ejemplos ni los logs.
 
@@ -82,7 +179,7 @@ Los secretos **solo** se leen del entorno. Nunca están en el código, los ejemp
 | `MAX_MSGS_CICLO` | no | `20` | Máximo de mensajes tratados por ciclo (defensa contra inundación). |
 | `MAX_BYTES_SYNC` | no | `2000000` | Tamaño máximo aceptado de `/sync` (`curl --max-filesize`). |
 
-## 5. Arranque
+## 3. Arranque contra un servidor real
 
 ```bash
 chmod +x bot.sh orden.sh pruebas.sh
@@ -94,6 +191,7 @@ read -rs "t?TOKEN_G4: "; echo; printf '%s' "$t" > ~/.token_g4 && chmod 600 ~/.to
 
 # En cada terminal (bot y cliente):
 export TOKEN_G4="$(cat ~/.token_g4)" CLAVE="$(cat ~/.clave_g4)"
+export URL_WEBHOOK='http://<servidor>:<puerto>/webhook' URL_SYNC='http://<servidor>:<puerto>/sync'
 ./bot.sh                       # terminal 1: dejarlo corriendo
 ./orden.sh ping 8.8.8.8        # terminal 2 (con las mismas variables exportadas)
 ```
@@ -106,7 +204,7 @@ export TOKEN_G4="$(cat ~/.token_g4)" CLAVE="$(cat ~/.clave_g4)"
   ±60 s de su reloj. Se comprueba con `timedatectl status` y, si hace falta, se arregla con
   `sudo timedatectl set-ntp true`.
 
-## 6. Ejemplos
+## 4. Ejemplos y formato de los mensajes
 
 ```bash
 ./orden.sh ping 8.8.8.8
@@ -145,7 +243,7 @@ Las opciones van **antes** de la acción. Lo que va después es el objetivo lite
 - Si se rechaza: `"estado":"rechazada"`, `"codigo_salida":null` y `"salida":"rechazada: <motivo>"`.
 - Si se agota el tiempo: `"estado":"error"` y `"codigo_salida":124`.
 
-## 7. Seguridad: HMAC, anti-repetición, límite de frecuencia y auditoría
+## 5. Seguridad: HMAC, anti-repetición, límite de frecuencia y auditoría
 
 **Firma HMAC-SHA256.** Los tokens de los 9 grupos se vieron en el directo, así que
 **cualquiera puede publicar en nuestro canal**. La firma demuestra que quien envía conoce la
@@ -206,18 +304,7 @@ jq -c '{id_orden, accion, decision, motivo}' estado_bot/auditoria.jsonl | tail -
 - Si falla la publicación de una respuesta, se registra (`publicada:false`) y el bot sigue,
   **sin volver a ejecutar la acción**.
 
-## 8. Cómo darle al profesor `orden.sh` y la CLAVE
-
-1. `orden.sh` **no es secreto**: se puede entregar por el aula virtual o por USB.
-2. La `CLAVE` va **fuera del canal**: en persona o por mensaje privado, **nunca** por el
-   webhook, que es público. Se genera con `openssl rand -hex 32` justo antes de la demo y se
-   cambia después.
-3. El profesor hace `export TOKEN_G4=... CLAVE=...` y usa `./orden.sh` igual que nosotros.
-4. Si el profesor usa **su propia herramienta** sin firma, arrancamos `EXIGIR_FIRMA=0 ./bot.sh`.
-   Sale un aviso grande y queda registrado en la auditoría. La validación de acción y
-   argumentos sigue protegiendo igual.
-
-## 9. Servidor falso y pruebas
+## 6. Servidor falso y casos de prueba
 
 `servidor_falso.py` imita **solo** lo verificado del real:
 
@@ -238,16 +325,12 @@ jq -c '{id_orden, accion, decision, motivo}' estado_bot/auditoria.jsonl | tail -
   rompe todo `/sync` que lo incluya) y `/_pruebas/fallar_respuesta/<token>` (la siguiente
   respuesta del bot recibe 500).
 
-```bash
-./pruebas.sh        # arranca el servidor falso y el bot, ejecuta todo y escribe resultados_pruebas.md
-```
-
 **`pruebas.sh` nunca usa el servidor real.** Fuerza las URL a `127.0.0.1` y genera un token
 y una clave aleatorios.
 
 Los ataques se escriben **entre comillas simples** (`'$(whoami)'`). Con comillas dobles o
-sin comillas, la **shell del alumno** ejecutaría `whoami` antes de llamar a `orden.sh` y la
-prueba no demostraría nada.
+sin comillas, la **shell de quien lanza la prueba** ejecutaría `whoami` antes de llamar a
+`orden.sh` y la prueba no demostraría nada.
 
 Para demostrar que una inyección no tuvo efecto **no basta con ver "rechazada"**. Por eso
 algunos ataques intentan escribir en `testigo.txt` o crear `pwned`. La prueba comprueba que
@@ -284,7 +367,9 @@ el hash del testigo no cambia y que `pwned` no existe.
 > `./pruebas.sh`) y el historial, junto con las pruebas contra el servidor **real**, en
 > `prompts.md` §5.2.
 
-**Validación del objetivo de `ping`** (`validar_objetivo` en `bot.sh`, con `LC_ALL=C`):
+## 7. Validación del objetivo de `ping`
+
+`validar_objetivo` en `bot.sh`, con `LC_ALL=C`:
 
 - IPv4: `^OCT.OCT.OCT.OCT$`, con `OCT = (25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])`.
   Va de 0 a 255 **sin ceros a la izquierda**, porque `ping 010.0.0.1` se interpretaría en
@@ -304,7 +389,7 @@ el hash del testigo no cambia y que `pwned` no existe.
 esperado. Los que también son ataques de `casos_inyeccion` se repitieron de extremo a
 extremo en Kali con `./pruebas.sh`: ver `prompts.md` §5.)*
 
-## 10. Limitaciones y supuestos
+## 8. Limitaciones y supuestos
 
 - **[SUPUESTO]** En una respuesta `rechazada`, `codigo_salida` es `null`, porque no se
   ejecutó nada, y el motivo va en `salida`. El contrato oficial no dice nada de este caso.
@@ -356,7 +441,7 @@ extremo en Kali con `./pruebas.sh`: ver `prompts.md` §5.)*
 - **webhook.site** es solo un esqueleto con TODO: sin `since`, sin paginación y sin
   persistencia. Es un plan B documentado.
 
-## 11. Por qué las comillas en las variables y por qué nunca se ejecuta texto recibido
+## 9. Por qué las comillas en las variables y por qué nunca se ejecuta texto recibido
 
 - Sin comillas, Bash **parte** el valor por espacios y **expande comodines**.
   `ping -c 4 $objetivo` con `objetivo='-c 100000 8.8.8.8'` se convierte en varios
@@ -371,7 +456,31 @@ extremo en Kali con `./pruebas.sh`: ver `prompts.md` §5.)*
 - Antes de mostrar nada en la terminal se quitan los caracteres de control (como ESC). Si
   no, una salida maliciosa podría manipular la terminal de quien la lee.
 
-## 12. Guion de demo (3–4 minutos)
+---
+
+## 🎓 Contexto académico
+
+Ejercicio 5 del **Máster de Ciberseguridad & IA (Evolve)**. Fase 1: bot con lista blanca;
+fase 2: ampliaciones de seguridad, de las que implementamos cuatro (firma HMAC,
+anti-repetición, límite de frecuencia y auditoría). Se presentó en directo contra el
+servidor del máster, compartido por los 9 grupos.
+
+<details>
+<summary><b>Cómo se entregaba <code>orden.sh</code> y la CLAVE al profesor</b></summary>
+
+1. `orden.sh` **no es secreto**: se puede entregar por el aula virtual o por USB.
+2. La `CLAVE` va **fuera del canal**: en persona o por mensaje privado, **nunca** por el
+   webhook, que es público. Se genera con `openssl rand -hex 32` justo antes de la demo y se
+   cambia después.
+3. El profesor hace `export TOKEN_G4=... CLAVE=...` y usa `./orden.sh` igual que nosotros.
+4. Si el profesor usa **su propia herramienta** sin firma, arrancamos `EXIGIR_FIRMA=0 ./bot.sh`.
+   Sale un aviso grande y queda registrado en la auditoría. La validación de acción y
+   argumentos sigue protegiendo igual.
+
+</details>
+
+<details>
+<summary><b>Guion de la demo en clase (3–4 minutos)</b></summary>
 
 | Tiempo | Qué hacemos | Qué decimos |
 |---|---|---|
@@ -385,3 +494,5 @@ extremo en Kali con `./pruebas.sh`: ver `prompts.md` §5.)*
 
 **Plan B:** si el profesor envía con su propia herramienta sin firma, reiniciamos con
 `EXIGIR_FIRMA=0 ./bot.sh` y lo explicamos (aviso en grande y en la auditoría).
+
+</details>

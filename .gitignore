@@ -1,5 +1,6 @@
 # Estado y logs generados al ejecutar el bot o las pruebas
 estado/
+estado_bot/
 *.log
 __pycache__/
 *.pyc
