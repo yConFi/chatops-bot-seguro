@@ -121,7 +121,7 @@ Total: 56 PASA · 0 FALLA
 
 Ejecutarlas en una segunda máquina (WSL) destapó un fallo real que en Kali no se veía: la
 duración se medía con el reloj de pared, que WSL corrige en caliente. Ahora se usa un reloj
-monotónico ([commit](https://github.com/yConFi/chatops-bot-seguro/commit/2ba7718)).
+monotónico ([commit](https://github.com/yConFi/chatops-bot-seguro/commit/96be130)).
 
 ## 🧠 Lo que demuestra este proyecto
 
