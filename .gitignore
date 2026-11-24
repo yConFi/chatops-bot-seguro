@@ -1,0 +1,8 @@
+# Estado y logs generados al ejecutar el bot o las pruebas
+estado/
+*.log
+__pycache__/
+*.pyc
+# Nunca subir secretos
+.env
+*.env
