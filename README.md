@@ -5,6 +5,7 @@
 ![Kali Linux](https://img.shields.io/badge/Kali_Linux-557C94?logo=kalilinux&logoColor=white)
 ![Pruebas](https://img.shields.io/badge/pruebas-56%2F56_pasan-brightgreen)
 ![HMAC-SHA256](https://img.shields.io/badge/firma-HMAC--SHA256-blueviolet)
+![Licencia MIT](https://img.shields.io/badge/licencia-MIT-yellow)
 
 Bot **ChatOps** que recibe órdenes por un canal HTTP **público y compartido** y solo
 ejecuta cuatro acciones de una **lista blanca** (`ping`, `estado`, `puertos`, `ayuda`).
@@ -151,6 +152,7 @@ monotónico ([commit](https://github.com/yConFi/chatops-bot-seguro/commit/96be13
 | [`prompt_debate_ej5.md`](prompt_debate_ej5.md) | Anexo: prompt de arranque y reglas del debate ChatGPT ↔ Claude. |
 | [`ronda1_auditoria_claude.md`](ronda1_auditoria_claude.md) | Anexo: auditoría de la Ronda 1 y respuestas del grupo. |
 | [`prompt_final_ej5.md`](prompt_final_ej5.md) | Anexo: prompt final con el que se generó el código. |
+| [`LICENSE`](LICENSE) | Licencia MIT. |
 
 ---
 
@@ -500,3 +502,9 @@ servidor del máster, compartido por los 9 grupos.
 `EXIGIR_FIRMA=0 ./bot.sh` y lo explicamos (aviso en grande y en la auditoría).
 
 </details>
+
+## 📄 Licencia
+
+Publicado bajo la [licencia MIT](LICENSE) © 2026 Grupo 4 (Pol, Fran, Javi, Yeray y Ricardo).
+Puedes usar, modificar y redistribuir el código libremente manteniendo el aviso de
+copyright; se ofrece «tal cual», sin garantía.
