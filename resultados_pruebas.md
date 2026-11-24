@@ -1,6 +1,6 @@
 # Resultados de pruebas.sh (servidor FALSO)
 
-Fecha: 2026-11-24T19:02:26Z · Máquina: Linux 7.1.5+kali-amd64 x86_64
+Fecha: 2026-11-24T20:58:34Z · Máquina: Linux 6.6.87.2-microsoft-standard-WSL2 x86_64
 
 | Caso | Esperado | Obtenido | Resultado |
 |---|---|---|---|
@@ -21,11 +21,11 @@ Fecha: 2026-11-24T19:02:26Z · Máquina: Linux 7.1.5+kali-amd64 x86_64
 | ping 8.8.8.8\ 8.8.4.4 | rechazada | rechazada | PASA |
 | ping $'8.8.8.8\nid' | rechazada | rechazada | PASA |
 | ping $'\E[31m8.8.8.8' | rechazada | rechazada | PASA |
-| ping 8.8.8.8\;\ echo\ pwned\ \>\ /tmp/pruebas_g4.N2xGqz/testigo.txt | rechazada | rechazada | PASA |
-| ping \$\(touch\ /tmp/pruebas_g4.N2xGqz/pwned\) | rechazada | rechazada | PASA |
-| ping \`touch\ /tmp/pruebas_g4.N2xGqz/pwned\` | rechazada | rechazada | PASA |
-| ping 8.8.8.8\ \&\&\ touch\ /tmp/pruebas_g4.N2xGqz/pwned | rechazada | rechazada | PASA |
-| ping 8.8.8.8\ \\|\ touch\ /tmp/pruebas_g4.N2xGqz/pwned | rechazada | rechazada | PASA |
+| ping 8.8.8.8\;\ echo\ pwned\ \>\ /tmp/pruebas_g4.8kf7hT/testigo.txt | rechazada | rechazada | PASA |
+| ping \$\(touch\ /tmp/pruebas_g4.8kf7hT/pwned\) | rechazada | rechazada | PASA |
+| ping \`touch\ /tmp/pruebas_g4.8kf7hT/pwned\` | rechazada | rechazada | PASA |
+| ping 8.8.8.8\ \&\&\ touch\ /tmp/pruebas_g4.8kf7hT/pwned | rechazada | rechazada | PASA |
+| ping 8.8.8.8\ \\|\ touch\ /tmp/pruebas_g4.8kf7hT/pwned | rechazada | rechazada | PASA |
 | fichero testigo tras los ataques | intacto | intacto | PASA |
 | fichero pwned tras los ataques | no_existe | no_existe | PASA |
 | /sync con JSON mal formado | ignorado+vivo | ignorado+vivo | PASA |
@@ -39,7 +39,7 @@ Fecha: 2026-11-24T19:02:26Z · Máquina: Linux 7.1.5+kali-amd64 x86_64
 | 6 órdenes en un minuto (mismo 'de') | ok,ok,ok,ok,ok,rechazada | ok,ok,ok,ok,ok,rechazada | PASA |
 | canal 'prueba' (respuestas, auditoría) | 0,0 | 0,0 | PASA |
 | canal 'respuestas-g4' (respuestas del bot) | 0 | 0 | PASA |
-| puertos con 81 líneas en ss | recortada+json | recortada+json | PASA |
+| puertos con 90 líneas en ss | recortada+json | recortada+json | PASA |
 | respuesta falsa con nuestro id | no_aceptada | no_aceptada | PASA |
 | reinicio: continúa desde el cursor | si | si | PASA |
 | sin firma con EXIGIR_FIRMA=0 (+aviso) | ok+1 | ok+1 | PASA |

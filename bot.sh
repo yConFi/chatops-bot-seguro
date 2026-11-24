@@ -129,7 +129,16 @@ comprobar_dependencias() {
   fi
 }
 
-ahora_ms() { date +%s%3N; }
+# ahora_ms → milisegundos de un reloj MONOTÓNICO (tiempo desde el arranque).
+#   Solo sirve para medir duraciones (restas), no como fecha. No usamos `date`
+#   porque el reloj de pared puede saltar (NTP, WSL2 sincronizando con Windows)
+#   y dar duraciones falsas; /proc/uptime nunca va hacia atrás.
+#   Formato "SEGUNDOS.CC": 10# evita que "05" se lea como octal.
+ahora_ms() {
+  local up _
+  read -r up _ < /proc/uptime
+  printf '%s\n' "$(( ${up%.*} * 1000 + 10#${up#*.} * 10 ))"
+}
 
 # esperar SEGUNDOS → sleep interrumpible por Ctrl+C / SIGTERM.
 esperar() {

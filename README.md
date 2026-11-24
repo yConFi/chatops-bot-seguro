@@ -8,7 +8,7 @@
 | `orden.sh` | El cliente: envía una orden firmada y espera la respuesta. |
 | `servidor_falso.py` | Imitación local del servidor del profesor, **solo para pruebas**. |
 | `pruebas.sh` | Pruebas automáticas contra el servidor falso. |
-| `resultados_pruebas.md` | Resultado real de la última ejecución de `pruebas.sh` en Kali (lo genera el script). |
+| `resultados_pruebas.md` | Resultado real de la última ejecución de `pruebas.sh` (lo genera el script; indica fecha y máquina). |
 | `prompts.md` | Uso de la IA y registro de las pruebas ejecutadas. |
 | `revision.md` | Checklist requisito → implementación → prueba y revisión de seguridad. |
 
@@ -278,7 +278,7 @@ el hash del testigo no cambia y que `pwned` no existe.
 | Ctrl+C (SIGINT) durante una acción | cierre limpio: sin `ping`/`timeout` huérfanos, bloqueo liberado, sin temporales |
 | al terminar, buscar `CLAVE` y `TOKEN_G4` en logs, estado, auditoría y resultados | ningún fichero los contiene |
 
-> **Resultado real (Kali, 2026-11-24): 56 PASA · 0 FALLA** contra el servidor **falso**.
+> **Resultado real (Kali y WSL Ubuntu, 2026-11-24): 56 PASA · 0 FALLA** contra el servidor **falso**.
 > Incluye el mensaje envenenado y las pruebas que sustituyen a las antiguas revisiones
 > manuales. El detalle caso a caso está en `resultados_pruebas.md` (lo genera
 > `./pruebas.sh`) y el historial, junto con las pruebas contra el servidor **real**, en
