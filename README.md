@@ -58,10 +58,14 @@ Cada mensaje recorre esta **cadena de controles**; el primero que falla decide y
 mensaje se rechaza o se ignora **sin ejecutar nada**:
 
 ```mermaid
-flowchart LR
-    A["Mensaje"] --> B{"≤ 4 KB"} --> C{"¿Es una orden?"} --> D{"Esquema y tipos"}
-    D --> E{"Firma HMAC"} --> F{"ts ±60 s e id nuevo"} --> G{"Límite de frecuencia"}
-    G --> H{"Acción en lista blanca y args válidos"} --> I["✅ Ejecutar con timeout 10 s"]
+flowchart TD
+    A["📨 Mensaje nuevo de /sync"] --> B["≤ 4 KB · ¿es una orden? · esquema y tipos"]
+    B --> C["🔏 Firma HMAC válida"]
+    C --> D["⏱️ ts a ±60 s · id_orden no visto"]
+    D --> E["🚦 ≤ 5 órdenes/min por remitente"]
+    E --> F["📋 Acción en lista blanca · argumentos válidos"]
+    F --> G["✅ Ejecutar con timeout de 10 s"]
+    B & C & D & E & F -. falla .-> X["❌ Rechazada o ignorada<br/>auditada · no se ejecuta nada"]
 ```
 
 - Hay **un solo endpoint por grupo**: órdenes y respuestas comparten canal y se distinguen
